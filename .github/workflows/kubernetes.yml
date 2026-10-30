@@ -6,8 +6,6 @@ jobs:
   local-kind:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      KUBECONFIG: ${{ runner.temp }}/recovery-boundary.kubeconfig
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,6 +15,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "KUBECONFIG=$RUNNER_TEMP/recovery-boundary.kubeconfig" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/boundary-bin"
           cd "$RUNNER_TEMP/boundary-bin"
           curl --fail --location --retry 3 -o kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
@@ -43,3 +42,4 @@ jobs:
       - name: Remove disposable cluster
         if: always()
         run: kind delete cluster --name recovery-boundary
+
