@@ -48,6 +48,12 @@ def digest(value):
                                      allow_nan=False).encode("ascii")).hexdigest()
 
 
+def conditional_patch(action):
+    return [{"op": "test", "path": "/metadata/uid", "value": action["uid"]},
+            {"op": "test", "path": "/metadata/resourceVersion", "value": action["resourceVersion"]},
+            {"op": "replace", "path": "/spec/replicas", "value": action["replicas"]}]
+
+
 class Gate:
     """Trusted service owns DB, policy, identities, clock and observations.
 
@@ -56,6 +62,8 @@ class Gate:
     def __init__(self, path):
         self.db = sqlite3.connect(path, timeout=5)
         self.db.execute("CREATE TABLE IF NOT EXISTS approvals (id TEXT PRIMARY KEY, binding TEXT NOT NULL, issued INTEGER NOT NULL, expires INTEGER NOT NULL, consumed INTEGER NOT NULL DEFAULT 0)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, action TEXT NOT NULL, binding TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY, execution_id TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL)")
         self.db.commit()
 
     def close(self):
@@ -99,14 +107,18 @@ class Gate:
         self.check(action, policy, state, requester, now)
         binding = digest({"action": action, "policy": policy})
         # Prepare bytes before claiming; no caller-controlled shell or arbitrary patch.
-        patch = [{"op": "test", "path": "/metadata/uid", "value": action["uid"]},
-                 {"op": "test", "path": "/metadata/resourceVersion", "value": action["resourceVersion"]},
-                 {"op": "replace", "path": "/spec/replicas", "value": action["replicas"]}]
+        patch = conditional_patch(action)
         with self.db:
             changed = self.db.execute("UPDATE approvals SET consumed=1 WHERE id=? AND binding=? AND issued<=? AND expires>? AND consumed=0",
                                       (approval_id, binding, now, now)).rowcount
             if changed != 1:
                 raise Denied("approval_unavailable")
+            # Same transaction as consumption: no consumed approval without intent.
+            self.db.execute("INSERT INTO executions VALUES (?,?,?,?,?)",
+                            (approval_id, json.dumps(action, sort_keys=True), binding, "PENDING", "authorized"))
+            self.db.execute("INSERT INTO events(execution_id,status,reason,at) VALUES (?,?,?,?)",
+                            (approval_id, "PENDING", "authorized", now))
         return {"decision": "AUTHORIZED_INTENT", "action_sha256": digest(action),
+                "execution_id": approval_id,
                 "target": {k: action[k] for k in ("cluster", "namespace", "name")},
                 "content_type": "application/json-patch+json", "patch": patch}

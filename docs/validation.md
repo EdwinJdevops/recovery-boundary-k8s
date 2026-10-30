@@ -12,4 +12,14 @@ Tests cover exact generated conditional patch, approval replay, mutation of each
 
 CI workflow runs tests, synthetic demo and compilation on Ubuntu with Python 3.12. Remote CI result must be checked independently; local success is not evidence of a successful remote run.
 
-Not tested: live Kubernetes API server or admission behavior, actual cluster recovery, Meta model inference, authenticated review service, deployment or browser UI. No paid API requests, cloud provisioning or AWS spending occurred.
+## Durable execution follow-up — October 30, 2026
+
+- Final `python -m unittest -v`: **23 tests passed in 30.388 seconds**, OK, on Windows Python 3.12.14 outside the sandbox.
+- Includes a real child process exiting abruptly with code 23 after the durable dispatch claim; parent confirms IN_DOUBT and blocks another dispatch.
+- Adds transaction rollback fault injection, execution-time policy/expiry/state/requester checks, eight concurrent dispatcher connections with one transport call, response validation, simulated application followed by timeout, and restart replay blocking.
+- `python demo_execution.py`: exit 0; IN_DOUBT persisted; restart retry DENIED; simulated write count 1.
+- Compilation check for gate.py, execution.py, test_execution.py and demo_execution.py passed; combined verification command exited 0.
+- The journal is additive to the existing SQLite schema. No production data migration was run.
+- No kubectl, Docker, kind or k3d executable was found on the current command path. No runtime was installed.
+
+Not tested: live Kubernetes API server or admission behavior, actual cluster recovery, Meta model inference, authenticated review service, deployment or browser UI. Transport callback tests and simulated application are not Kubernetes integration evidence. No paid API requests, cloud provisioning or AWS spending occurred.

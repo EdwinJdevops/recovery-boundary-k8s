@@ -9,6 +9,7 @@ Python 3.12; standard library only. No package installation, API keys, cloud acc
 ```sh
 python -m unittest -v
 python demo.py
+python demo_execution.py
 ```
 
 The demo uses explicitly synthetic proposals. It denies an excessive replica count, authorizes the reviewed proposal once, then denies replay. It is not evidence of a live or recorded Meta model invocation.
@@ -28,7 +29,9 @@ The restricted schema contains only ASCII strings and integers. Sorted compact J
 
 This is a library and offline demonstration, not a deployed or bypass-resistant enforcement service. Authentication, policy, observation, clock and database access are trusted inputs owned by a future service; the model must not control them or call `approve`. The model must have no cluster write credentials. A compromised service or database is outside this prototype's boundary.
 
-Authorization consumes approval before returning an intent. A crash may therefore lose an intent; do not reset consumed approvals automatically. An intent is not evidence of an attempted or successful Kubernetes mutation. There is no executor, durable execution journal, signed capability, revocation endpoint, API server integration, RBAC deployment, health proof or outcome reconciliation yet. Separate-resource facts can change after observation; the patch only conditions the target Deployment. Resource versions must be compared for equality, not numerically.
+Authorization and the durable execution intent now commit in one SQLite transaction. The dispatcher rechecks current policy, requester, target evidence and approval expiry, then persists `IN_DOUBT` before invoking its trusted transport callback. Concurrent workers and restarts cannot dispatch that execution again. A validated response becomes `APPLIED_RESPONSE`; a timeout, invalid response or interrupted process remains uncertain. Matching desired state is not proof of healthy recovery. No automatic retry or reconciliation claim is made.
+
+`Executor.receipt` returns the persisted state transition history. It is a local database record, not a signed or tamper-proof receipt. The caller supplies a trusted transport; no network transport or credential discovery is enabled. There is no authenticated service, revocation endpoint, actual API server integration, RBAC deployment, health proof or outcome reconciliation yet. Separate-resource facts can change after observation; the patch only conditions the target Deployment. Resource versions must be compared for equality, not numerically.
 
 ## Meta integration status
 
@@ -38,4 +41,4 @@ Not connected or tested. No paid Meta calls, payments or AWS resources were used
 
 Code written fresh on October 30, 2026. Existing repositories were inspected for scope; no code was copied from them. AI coding assistance: OpenAI Codex. Python's standard library is used. No third-party runtime dependencies or model weights are bundled. No open-source license grant has been selected for this original code yet.
 
-See [rules verification](docs/rules.md) and [validation](docs/validation.md).
+See [rules verification](docs/rules.md), [validation](docs/validation.md) and [product evidence bar](docs/product-evidence.md).

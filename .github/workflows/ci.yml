@@ -12,4 +12,5 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest -v
       - run: python demo.py
-      - run: python -m compileall -q gate.py fixtures.py demo.py test_gate.py
+      - run: python demo_execution.py
+      - run: python -m compileall -q gate.py execution.py fixtures.py demo.py demo_execution.py test_gate.py test_execution.py
