@@ -1,0 +1,45 @@
+name: kubernetes-integration
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  local-kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KUBECONFIG: ${{ runner.temp }}/recovery-boundary.kubeconfig
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install verified local test tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/boundary-bin"
+          cd "$RUNNER_TEMP/boundary-bin"
+          curl --fail --location --retry 3 -o kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
+          curl --fail --location --retry 3 -o kind.sha256sum https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64.sha256sum
+          echo "$(cut -d ' ' -f1 kind.sha256sum)  kind" | sha256sum --check
+          curl --fail --location --retry 3 -o kubectl https://dl.k8s.io/release/v1.35.8/bin/linux/amd64/kubectl
+          curl --fail --location --retry 3 -o kubectl.sha256 https://dl.k8s.io/release/v1.35.8/bin/linux/amd64/kubectl.sha256
+          echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+          chmod +x kind kubectl
+          echo "$RUNNER_TEMP/boundary-bin" >> "$GITHUB_PATH"
+      - name: Create disposable local cluster
+        run: kind create cluster --name recovery-boundary --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --kubeconfig "$KUBECONFIG" --wait 120s
+      - name: Build and load fixture image
+        run: |
+          docker build -t recovery-boundary-demo:test integration/app
+          kind load docker-image recovery-boundary-demo:test --name recovery-boundary
+      - name: Verify real API and application health
+        run: python integration/run.py
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: real-kubernetes-evidence
+          path: integration-result.json
+      - name: Remove disposable cluster
+        if: always()
+        run: kind delete cluster --name recovery-boundary
