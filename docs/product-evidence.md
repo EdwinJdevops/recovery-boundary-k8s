@@ -16,7 +16,7 @@ The differentiator to demonstrate is preservation of the decision and outcome ev
 
 ## Current evidence
 
-The original gate has local and remote CI evidence. The execution journal adds fault-injection tests and an explicitly synthetic restart demonstration. Meta inference, actual Kubernetes transport and rollout verification are still pending.
+The gate and execution journal have local and remote CI evidence, fault-injection tests and an explicitly synthetic restart demonstration. The local-kind transport has now passed real Kubernetes v1.35.8 integration: API precondition vetoes, approved scaling, controller readiness, five Service HTTP probes and replay blocking. This is a fixture capacity-change test. Meta inference, real incident diagnosis/recovery and a trustworthy review surface remain pending.
 
 ## Build order while API credits are pending
 

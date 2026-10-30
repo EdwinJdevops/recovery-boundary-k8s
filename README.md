@@ -31,7 +31,9 @@ This is a library and offline demonstration, not a deployed or bypass-resistant 
 
 Authorization and the durable execution intent now commit in one SQLite transaction. The dispatcher rechecks current policy, requester, target evidence and approval expiry, then persists `IN_DOUBT` before invoking its trusted transport callback. Concurrent workers and restarts cannot dispatch that execution again. A validated response becomes `APPLIED_RESPONSE`; a timeout, invalid response or interrupted process remains uncertain. Matching desired state is not proof of healthy recovery. No automatic retry or reconciliation claim is made.
 
-`Executor.receipt` returns the persisted state transition history. It is a local database record, not a signed or tamper-proof receipt. The caller supplies a trusted transport; no network transport or credential discovery is enabled. There is no authenticated service, revocation endpoint, actual API server integration, RBAC deployment, health proof or outcome reconciliation yet. Separate-resource facts can change after observation; the patch only conditions the target Deployment. Resource versions must be compared for equality, not numerically.
+`Executor.receipt` returns the persisted state transition history. It is a local database record, not a signed or tamper-proof receipt. The caller supplies a trusted transport. `LocalKubernetes` is an explicit local-kind-only adapter with dedicated kubeconfig/context checks; it does not discover or select a default cluster. Real API tests on Kubernetes v1.35.8 verify precondition vetoes, scaling, controller readiness and separate Service HTTP probes. See [integration scope and reproduction](docs/kubernetes-integration.md).
+
+There is no authenticated review service, revocation endpoint, production RBAC deployment or outcome reconciliation yet. Separate-resource facts can change after observation; the patch only conditions the target Deployment. Resource versions must be compared for equality, not numerically. Test-fixture readiness and five HTTP probes do not establish a production availability guarantee.
 
 ## Meta integration status
 

@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 .env
 integration-result.json
+work/
+*.kubeconfig
