@@ -62,7 +62,7 @@ def make_server(app, port=0):
             if self.command == "GET" and self.path in assets:
                 types = {"/":"text/html; charset=utf-8","/review.js":"text/javascript; charset=utf-8","/review.css":"text/css; charset=utf-8"}
                 return self.respond(200,(Path(__file__).with_name("review_ui")/assets[self.path]).read_bytes(),types[self.path])
-            match = re.fullmatch(r"/reviews/([a-zA-Z0-9_-]{1,64})(/approve)?",self.path)
+            match = re.fullmatch(r"/reviews/([a-zA-Z0-9_-]{1,64})(/approve|/revoke)?",self.path)
             if not match:
                 return self.respond(404,{"error":"not_found"})
             gate = None
@@ -88,7 +88,10 @@ def make_server(app, port=0):
                     if type(body) is not dict or set(body) != {"snapshot_sha256"}:
                         return self.respond(400,{"error":"invalid_body"})
                     now = app.clock()
-                    result = reviews.approve(match[1],body["snapshot_sha256"],principal,policy,app.state(now),now)
+                    if match[2] == "/revoke":
+                        result = reviews.revoke(match[1],body["snapshot_sha256"],principal,policy,now)
+                    else:
+                        result = reviews.approve(match[1],body["snapshot_sha256"],principal,policy,app.state(now),now)
                 else:
                     return self.respond(405,{"error":"method_denied"})
                 return self.respond(200,result)

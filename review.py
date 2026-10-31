@@ -2,7 +2,7 @@
 import json
 import re
 import sqlite3
-from gate import Gate, Denied, digest, conditional_patch, parse
+from gate import Gate, Denied, digest, conditional_patch, parse, validate_policy
 
 
 class Reviews:
@@ -37,11 +37,24 @@ class Reviews:
         return snapshot, row
 
     def view(self, review_id, principal, current_policy):
+        validate_policy(current_policy)
         snapshot, row = self._row(review_id)
         if principal != snapshot["action"]["requester"] and principal not in current_policy.get("approvers",[]):
             raise Denied("review_access_denied")
-        return {"snapshot":snapshot,"snapshot_sha256":row[1],"status":row[2],
-                "approver":row[3],"decided_at":row[4]}
+        revoked = self.gate.db.execute("SELECT revoked_by,reason,at FROM revocations WHERE id=?",(review_id,)).fetchone()
+        execution = self.gate.db.execute("SELECT status FROM executions WHERE id=?",(review_id,)).fetchone()
+        return {"snapshot":snapshot,"snapshot_sha256":row[1],"status":"REVOKED" if revoked else row[2],
+                "approver":row[3],"decided_at":row[4],
+                "execution_status":execution[0] if execution else None,
+                "can_revoke":principal in current_policy["approvers"] and row[2]=="APPROVED" and not revoked and (execution is None or execution[0]=="PENDING"),
+                "revocation":dict(zip(("revoked_by","reason","at"),revoked)) if revoked else None}
+
+    def revoke(self, review_id, viewed_digest, principal, policy, now):
+        snapshot, row = self._row(review_id)
+        if row[2] != "APPROVED" or type(viewed_digest) is not str or viewed_digest != row[1]:
+            raise Denied("review_changed_or_decided")
+        self.gate.revoke(review_id,principal,policy,now)
+        return self.view(review_id,principal,policy)
 
     def approve(self, review_id, viewed_digest, principal, policy, state, now):
         snapshot, row = self._row(review_id)

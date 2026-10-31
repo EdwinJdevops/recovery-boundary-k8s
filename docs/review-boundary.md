@@ -10,6 +10,7 @@ The local review prototype exposes the significant transaction data before appro
 - Approval expiration remains the original review expiry; waiting to approve never extends it.
 - Reviewed evidence remains bound at authorization and dispatch. An unreviewed change invalidates the action even if its target identity fields are unchanged.
 - The review interface does not expose a dispatch endpoint or cluster credentials. Reviewing/approving alone does not produce a Kubernetes write.
+- Current authorized approvers can revoke an approved, unused grant through `POST /reviews/{id}/revoke` with the viewed snapshot digest. Revocation is durable and attributed. It is serialized with the dispatch claim; a pending execution becomes CANCELLED. Once dispatch has been claimed, cancellation is refused rather than falsely reported as successful. The UI offers revocation only to a current approver while the execution is still revocable.
 
 The generated review hash is an internal binding, not proof of human attention, a signature or a tamper-proof audit log. The database and policy/evidence providers remain trusted. The original library API remains available to trusted integration code; this prototype does not establish process isolation against callers with direct database or cluster access.
 
@@ -21,7 +22,7 @@ The service binds only 127.0.0.1. Tokens are not stored in browser storage, cook
 
 ## Production gaps
 
-This is local prototype authentication, not SSO, MFA, enterprise identity verification or a remotely deployed approval service. It uses Python's standard-library HTTP server, which Python explicitly does not recommend for production. No public TLS ingress, rate limiting, token lifecycle/revocation, signed audit storage or privileged executor isolation is implemented. Do not expose this server through a tunnel or public interface. Loopback does not protect against a compromised local OS or malicious local process.
+This is local prototype authentication, not SSO, MFA, enterprise identity verification or a remotely deployed approval service. It uses Python's standard-library HTTP server, which Python explicitly does not recommend for production. No public TLS ingress, rate limiting, identity-token lifecycle/revocation, signed audit storage or privileged executor isolation is implemented. Approval revocation is separate from identity-token revocation. Do not expose this server through a tunnel or public interface. Loopback does not protect against a compromised local OS or malicious local process.
 
 Meta model inference is not implemented by this review flow. The browser demonstration uses synthetic fixture evidence, while the separate kind integration exercises the review kernel before a real conditional API write. HTTP authentication tests use generated, temporary identities and actual loopback requests.
 

@@ -55,7 +55,7 @@ class Executor:
         # Persist ambiguity BEFORE entering transport. Crash at any later point
         # cannot make a restart retry. Fresh evidence/approval is a separate action.
         with self.gate.db:
-            changed = self.gate.db.execute("UPDATE executions SET status='IN_DOUBT',reason='dispatch_claimed' WHERE id=? AND status='PENDING' AND EXISTS (SELECT 1 FROM approvals WHERE approvals.id=executions.id AND consumed=1 AND issued<=? AND expires>?)", (execution_id, now, now)).rowcount
+            changed = self.gate.db.execute("UPDATE executions SET status='IN_DOUBT',reason='dispatch_claimed' WHERE id=? AND status='PENDING' AND NOT EXISTS (SELECT 1 FROM revocations WHERE revocations.id=executions.id) AND EXISTS (SELECT 1 FROM approvals WHERE approvals.id=executions.id AND consumed=1 AND issued<=? AND expires>?)", (execution_id, now, now)).rowcount
             if changed != 1:
                 raise Denied("dispatch_unavailable")
             self.gate.db.execute("INSERT INTO events(execution_id,status,reason,at) VALUES (?,?,?,?)", (execution_id, "IN_DOUBT", "dispatch_claimed", now))

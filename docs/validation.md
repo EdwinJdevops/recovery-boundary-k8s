@@ -50,3 +50,10 @@ Remaining unverified: Meta model inference, real outage diagnosis/recovery, auth
 - [Reviewed API evidence artifact](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41203371227/artifacts/13042803652) uploaded; disposable cluster cleanup succeeded. This combines the review kernel with real API execution. The separate HTTP tests validate authentication; this is not an enterprise identity or human-attention test.
 
 This supersedes only the earlier pending local-review status. Production SSO/MFA, revocation, public TLS hosting and privileged executor isolation remain unimplemented. The review HTTP server is explicitly a loopback prototype. No Meta inference or paid API calls were made.
+
+## Revocation and production gates — October 31, 2026
+
+- Full local suite: 49 tests passed in 33.000 seconds, OK. After tightening the UI eligibility flag, the focused revocation suite passed all 8 tests in 11.807 seconds. Compilation passed; combined verification commands exited 0.
+- Covers revocation before authorization, durable cancellation of pending execution, refusal after dispatch claim, eight rounds of revocation/dispatch concurrency, HTTP reviewer attribution, requester denial, and malformed policy collection/number rejection.
+- Added a controlled zero-backend outage plus API-enforced RBAC denial tests to the kind harness. Remote results for these additions are pending until independently checked after publication.
+- Pinned the fixture base-image digest and action commits to values already resolved in prior successful CI logs. No production readiness or independent security audit is claimed.

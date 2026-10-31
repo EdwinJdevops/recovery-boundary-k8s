@@ -12,11 +12,13 @@ The `kubernetes-integration` workflow creates kind inside an ephemeral GitHub Li
 6. Make five HTTP requests through the Kubernetes Service from inside the cluster and verify the expected response body.
 7. Attempt to replay the execution and confirm it is blocked.
 
-The workflow uploads `integration-result.json` only on success, then removes its own named kind cluster. An `APPLIED_RESPONSE` receipt is still separate from workload readiness and HTTP probe evidence. Five successful requests are a smoke test, not an availability SLO, a load test or proof that every replica served traffic. The fixture starts healthy; this verifies an authorized capacity change, not diagnosis or recovery from a real customer outage.
+The harness now also injects a controlled zero-backend outage, proves the Service is unreachable from an independent probe pod, blocks a revoked recovery and restores three replicas through a new exact review. The recovery PATCH is sent using API-enforced impersonation of a restricted ServiceAccount; attempts to read secrets/other targets/namespaces, delete the target or create a pod must receive Forbidden. The harness retains a separate administrator connection for fixture creation, fault injection and cleanup.
+
+The workflow uploads `integration-result.json` only on success, then removes its own named kind cluster. An `APPLIED_RESPONSE` receipt is still separate from workload readiness and HTTP probe evidence. Five successful requests are a smoke test, not an availability SLO, a load test or proof that every replica served traffic. This is a deliberately injected known outage, not automated diagnosis of a real customer incident. Impersonation validates RBAC enforcement but does not validate an isolated worker credential or production deployment.
 
 ## Reproduce with an existing local Docker runtime
 
-Use kind v0.33.0, kubectl v1.35.8 and Python 3.12. The workflow downloads the official binaries and verifies their published SHA-256 checksums. The Kubernetes node image is pinned by digest in the workflow. The fixture base image uses the `python:3.12-alpine` tag and is not yet pinned by digest.
+Use kind v0.33.0, kubectl v1.35.8 and Python 3.12. The workflow downloads the official binaries and verifies their published SHA-256 checksums. The Kubernetes node and fixture base images are pinned by digest. Action commits are pinned to the versions previously resolved by CI.
 
 In a disposable Linux environment, from the repository root:
 

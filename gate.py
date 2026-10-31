@@ -28,6 +28,22 @@ FIELDS = {"schema", "cluster", "namespace", "name", "uid", "resourceVersion",
           "operation", "replicas", "requester", "incident"}
 
 
+def validate_policy(policy):
+    required = {"cluster","namespaces","max_replicas","requesters","approvers","version"}
+    if type(policy) is not dict or set(policy) != required:
+        raise Denied("invalid_policy")
+    if (type(policy["cluster"]) is not str or not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}",policy["cluster"])
+            or type(policy["max_replicas"]) is not int or not 1 <= policy["max_replicas"] <= 10
+            or type(policy["version"]) is not int or policy["version"] < 1):
+        raise Denied("invalid_policy")
+    for field in ("namespaces","requesters","approvers"):
+        values = policy[field]
+        if (type(values) is not list or not values
+                or any(type(v) is not str or not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}",v) for v in values)
+                or len(set(values)) != len(values)):
+            raise Denied("invalid_policy")
+
+
 def validate(action):
     if type(action) is not dict or set(action) != FIELDS:
         raise Denied("invalid_fields")
@@ -65,6 +81,7 @@ class Gate:
         self.db.execute("CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, action TEXT NOT NULL, binding TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY, execution_id TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS approval_evidence (id TEXT PRIMARY KEY, digest TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS revocations (id TEXT PRIMARY KEY, revoked_by TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL)")
         self.db.commit()
 
     def close(self):
@@ -78,6 +95,7 @@ class Gate:
     @staticmethod
     def check(action, policy, state, requester, now):
         validate(action)
+        validate_policy(policy)
         if type(now) is not int:
             raise Denied("invalid_clock")
         try:
@@ -107,6 +125,27 @@ class Gate:
         binding = digest({"action": action, "policy": policy})
         return (approval_id, binding, now, now + ttl)
 
+    def revoke(self, approval_id, principal, policy, now):
+        validate_policy(policy)
+        if principal not in policy["approvers"] or type(now) is not int:
+            raise Denied("revocation_denied")
+        with self.db:
+            # Linearize with dispatch: a committed claim cannot be called cancelled.
+            self.db.execute("BEGIN IMMEDIATE")
+            grant = self.db.execute("SELECT issued FROM approvals WHERE id=?",(approval_id,)).fetchone()
+            if grant is None or now < grant[0]:
+                raise Denied("approval_unavailable")
+            execution = self.db.execute("SELECT status FROM executions WHERE id=?",(approval_id,)).fetchone()
+            if execution is not None and execution[0] not in ("PENDING","CANCELLED"):
+                raise Denied("dispatch_already_claimed")
+            self.db.execute("INSERT OR IGNORE INTO revocations VALUES (?,?,?,?)",
+                            (approval_id,principal,"operator_cancelled",now))
+            if execution is not None and execution[0] == "PENDING":
+                self.db.execute("UPDATE executions SET status='CANCELLED',reason='approval_revoked' WHERE id=?",(approval_id,))
+                self.db.execute("INSERT INTO events(execution_id,status,reason,at) VALUES (?,?,?,?)",
+                                (approval_id,"CANCELLED","approval_revoked",now))
+        return "REVOKED"
+
     def approve(self, approval_id, action, policy, state, requester, approver, now, ttl=120):
         values = self.approval_values(approval_id, action, policy, state, requester, approver, now, ttl)
         with self.db:
@@ -121,7 +160,7 @@ class Gate:
         # Prepare bytes before claiming; no caller-controlled shell or arbitrary patch.
         patch = conditional_patch(action)
         with self.db:
-            changed = self.db.execute("UPDATE approvals SET consumed=1 WHERE id=? AND binding=? AND issued<=? AND expires>? AND consumed=0",
+            changed = self.db.execute("UPDATE approvals SET consumed=1 WHERE id=? AND binding=? AND issued<=? AND expires>? AND consumed=0 AND NOT EXISTS (SELECT 1 FROM revocations WHERE revocations.id=approvals.id)",
                                       (approval_id, binding, now, now)).rowcount
             if changed != 1:
                 raise Denied("approval_unavailable")

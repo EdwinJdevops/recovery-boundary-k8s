@@ -12,7 +12,7 @@ NAME = "checkout"
 
 
 class LocalKubernetes:
-    def __init__(self, kubeconfig, kubectl="kubectl"):
+    def __init__(self, kubeconfig, kubectl="kubectl", executor_identity=False):
         path = Path(kubeconfig).resolve(strict=True)
         self.prefix = [kubectl, "--kubeconfig", str(path), "--context", CONTEXT,
                        "--request-timeout=10s"]
@@ -30,12 +30,18 @@ class LocalKubernetes:
                 raise Denied("local_cluster_required")
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise Denied("invalid_local_config") from exc
+        if executor_identity:
+            # CI tests API-enforced RBAC using admin-authorized impersonation.
+            # This is not an isolated worker credential or a production auth flow.
+            self.prefix += ["--as","system:serviceaccount:"+NAMESPACE+":recovery-executor"]
 
     def run(self, args, input_text=None):
         # args come from trusted code, never model-generated command text.
         result = subprocess.run(self.prefix + args, input=input_text, capture_output=True,
                                 text=True, timeout=20, shell=False)
         if result.returncode:
+            if "Error from server (Forbidden)" in result.stderr:
+                raise Denied("kubernetes_forbidden")
             raise Denied("kubectl_failed")  # stderr can contain credentials; do not log it.
         return result.stdout
 

@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: recovery-executor
+  namespace: recovery-boundary-demo
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: recovery-executor
+  namespace: recovery-boundary-demo
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [checkout]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: recovery-executor
+  namespace: recovery-boundary-demo
+subjects:
+  - kind: ServiceAccount
+    name: recovery-executor
+    namespace: recovery-boundary-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: recovery-executor

@@ -33,6 +33,9 @@ def main():
     client.run(["apply","-f",str(Path(__file__).with_name("workload.yaml"))])
     initial = client.read()
     wait_ready(client,initial,1)
+    client.run(["wait","--for=condition=Ready","pod/service-probe","-n",NAMESPACE,"--timeout=120s"])
+    client.run(["apply","-f",str(Path(__file__).with_name("rbac.yaml"))])
+    executor = LocalKubernetes(os.environ["KUBECONFIG"],executor_identity=True)
     policy = dict(cluster=CONTEXT,namespaces=[NAMESPACE],max_replicas=4,
                   requesters=["operator"],approvers=["reviewer"],version=1)
     def action_for(obj, incident):
@@ -40,6 +43,27 @@ def main():
                     uid=obj["metadata"]["uid"],resourceVersion=obj["metadata"]["resourceVersion"],
                     operation="scale_deployment",replicas=3,requester="operator",incident=incident)
     checks = []
+    require(executor.read()["metadata"]["uid"] == client.read()["metadata"]["uid"],"scoped executor cannot read target")
+    forbidden_commands = [
+        ["get","secret","boundary-deny","-n",NAMESPACE,"-o","json"],
+        ["get","deployment","unapproved","-n",NAMESPACE,"-o","json"],
+        ["get","deployment",NAME,"-n","default","-o","json"],
+        ["delete","deployment",NAME,"-n",NAMESPACE],
+        ["run","unapproved-pod","-n",NAMESPACE,"--image=recovery-boundary-demo:test","--restart=Never"],
+    ]
+    for command in forbidden_commands:
+        try:
+            executor.run(command)
+        except Denied as error:
+            require(str(error)=="kubernetes_forbidden","permission test failed for a non-RBAC reason")
+        else:
+            raise AssertionError("executor exceeded RBAC scope")
+    checks.append("rbac_denies_secrets_other_targets_namespaces_delete_and_pod_creation")
+    probe = "import urllib.request; body=urllib.request.urlopen('http://checkout:8080/index.html',timeout=5).read(); assert body.strip()==b'recovery-boundary-ok'; print('HTTP_OK')"
+    def service_probe(script):
+        return client.run(["exec","pod/service-probe","-n",NAMESPACE,"--","python","-c",script]).strip()
+    require(service_probe(probe)=="HTTP_OK","baseline service is unhealthy")
+    checks.append("baseline_service_http_passed")
     with tempfile.TemporaryDirectory() as directory:
         gate = Gate(str(Path(directory)/"journal.db"))
         try:
@@ -70,7 +94,45 @@ def main():
             require(client.read()["spec"]["replicas"] == 1,"UID veto changed replicas")
             checks.append("wrong_uid_rejected_by_api")
 
-            # Fresh evidence and a different approval are needed for the valid action.
+            # Harness-only fault injection. The recovery executor cannot scale to zero.
+            client.run(["scale","deployment",NAME,"-n",NAMESPACE,"--replicas=0"])
+            client.run(["wait","--for=delete","pod","-l","app=recovery-boundary-demo","-n",NAMESPACE,"--timeout=120s"])
+            end = time.monotonic()+30
+            while True:
+                slices = json.loads(client.run(["get","endpointslices.discovery.k8s.io","-n",NAMESPACE,"-l","kubernetes.io/service-name=checkout","-o","json"]))
+                if not any(e.get("conditions",{}).get("ready",True) for item in slices["items"] for e in item.get("endpoints",[])):
+                    break
+                require(time.monotonic()<end,"service endpoints did not become unavailable")
+                time.sleep(1)
+            failure_probe = """import urllib.request, urllib.error
+try:
+    urllib.request.urlopen('http://checkout:8080/index.html',timeout=2)
+except (urllib.error.URLError,TimeoutError):
+    print('SERVICE_UNAVAILABLE')
+else:
+    raise SystemExit('service unexpectedly reachable')
+"""
+            require(service_probe(failure_probe)=="SERVICE_UNAVAILABLE","injected outage not observed")
+            require(client.read()["spec"]["replicas"]==0,"outage injection did not scale down")
+            checks.append("controlled_zero_backend_outage_observed")
+
+            cancelled_obj = client.read()
+            cancelled_at = int(time.time())
+            cancelled_action = action_for(cancelled_obj,"cancelled-recovery")
+            cancelled_state = client.observation(cancelled_obj,cancelled_at)
+            cancelled_reviews = Reviews(gate)
+            cancelled_hash = cancelled_reviews.create("cancelled",json.dumps(cancelled_action),policy,cancelled_state,"operator",cancelled_at)
+            cancelled_reviews.approve("cancelled",cancelled_hash,"reviewer",policy,cancelled_state,cancelled_at)
+            cancelled_reviews.revoke("cancelled",cancelled_hash,"reviewer",policy,cancelled_at)
+            try:
+                gate.authorize("cancelled",json.dumps(cancelled_action),policy,cancelled_state,"operator",cancelled_at)
+            except Denied:
+                require(client.read()["spec"]["replicas"]==0,"cancelled recovery changed target")
+                checks.append("revoked_recovery_authorization_blocked")
+            else:
+                raise AssertionError("revoked recovery was authorized")
+
+            # Fresh evidence and a different approval are needed for recovery.
             fresh = client.read()
             now = int(time.time())
             action = action_for(fresh,"valid-scale")
@@ -83,7 +145,7 @@ def main():
             gate.authorize("valid",json.dumps(action),policy,state,"operator",now)
             applied = []
             def transport(request):
-                result = client(request)
+                result = executor(request)
                 applied.append(result)
                 return result
             receipt = Executor(gate).dispatch("valid",policy,state,"operator",int(time.time()),transport)
@@ -92,9 +154,8 @@ def main():
             wait_ready(client,applied[0],3)
             checks.append("three_replicas_controller_ready")
             # Independent application check through Service DNS, from within the cluster.
-            probe = "import urllib.request; body=urllib.request.urlopen('http://checkout:8080/index.html',timeout=5).read(); assert body.strip()==b'recovery-boundary-ok'; print('HTTP_OK')"
             for _ in range(5):
-                out = client.run(["exec","deployment/"+NAME,"-n",NAMESPACE,"--","python","-c",probe])
+                out = service_probe(probe)
                 require(out.strip() == "HTTP_OK","service HTTP probe failed")
             checks.append("five_service_http_probes_passed")
             try:
@@ -105,7 +166,7 @@ def main():
                 raise AssertionError("execution replay accepted")
             report = {"mode":"REAL_KIND_API", "checks":checks,"replicas":3,
                       "kubernetes":json.loads(client.run(["version","-o","json"]))["serverVersion"]["gitVersion"],
-                      "scope":"local fixture; not production recovery or sustained availability proof"}
+                      "scope":"controlled zero-backend fixture outage; not real customer incident diagnosis or sustained availability proof"}
             output = Path("integration-result.json")
             output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
             print(json.dumps(report,sort_keys=True))
