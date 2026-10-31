@@ -64,10 +64,16 @@ class Gate:
         self.db.execute("CREATE TABLE IF NOT EXISTS approvals (id TEXT PRIMARY KEY, binding TEXT NOT NULL, issued INTEGER NOT NULL, expires INTEGER NOT NULL, consumed INTEGER NOT NULL DEFAULT 0)")
         self.db.execute("CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, action TEXT NOT NULL, binding TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY, execution_id TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS approval_evidence (id TEXT PRIMARY KEY, digest TEXT NOT NULL)")
         self.db.commit()
 
     def close(self):
         self.db.close()
+
+    def check_review_evidence(self, approval_id, state):
+        row = self.db.execute("SELECT digest FROM approval_evidence WHERE id=?",(approval_id,)).fetchone()
+        if row is not None and row[0] != digest({k:v for k,v in state.items() if k != "observed_at"}):
+            raise Denied("reviewed_evidence_changed")
 
     @staticmethod
     def check(action, policy, state, requester, now):
@@ -91,20 +97,26 @@ class Gate:
         except (KeyError, TypeError) as exc:
             raise Denied("missing_evidence") from exc
 
-    def approve(self, approval_id, action, policy, state, requester, approver, now, ttl=120):
-        self.check(action, policy, state, requester, now)
+    @staticmethod
+    def approval_values(approval_id, action, policy, state, requester, approver, now, ttl=120):
+        Gate.check(action, policy, state, requester, now)
         if approver == requester or approver not in policy.get("approvers", []):
             raise Denied("approver_denied")
         if type(ttl) is not int or not 1 <= ttl <= 300:
             raise Denied("invalid_ttl")
         binding = digest({"action": action, "policy": policy})
+        return (approval_id, binding, now, now + ttl)
+
+    def approve(self, approval_id, action, policy, state, requester, approver, now, ttl=120):
+        values = self.approval_values(approval_id, action, policy, state, requester, approver, now, ttl)
         with self.db:
             self.db.execute("INSERT INTO approvals(id,binding,issued,expires) VALUES (?,?,?,?)",
-                            (approval_id, binding, now, now + ttl))
+                            values)
 
     def authorize(self, approval_id, raw, policy, state, requester, now):
         action = parse(raw)
         self.check(action, policy, state, requester, now)
+        self.check_review_evidence(approval_id,state)
         binding = digest({"action": action, "policy": policy})
         # Prepare bytes before claiming; no caller-controlled shell or arbitrary patch.
         patch = conditional_patch(action)

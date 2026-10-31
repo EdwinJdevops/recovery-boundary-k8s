@@ -42,4 +42,3 @@ jobs:
       - name: Remove disposable cluster
         if: always()
         run: kind delete cluster --name recovery-boundary
-

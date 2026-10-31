@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from gate import Gate, Denied, conditional_patch
 from execution import Executor
+from review import Reviews
 from kubernetes_local import LocalKubernetes, workload_ready, CONTEXT, NAMESPACE, NAME
 
 
@@ -74,7 +75,11 @@ def main():
             now = int(time.time())
             action = action_for(fresh,"valid-scale")
             state = client.observation(fresh,now)
-            gate.approve("valid",action,policy,state,"operator","reviewer",now)
+            reviews = Reviews(gate)
+            reviews.create("valid",json.dumps(action),policy,state,"operator",now)
+            viewed = reviews.view("valid","reviewer",policy)
+            reviews.approve("valid",viewed["snapshot_sha256"],"reviewer",policy,state,now)
+            checks.append("exact_review_snapshot_approved")
             gate.authorize("valid",json.dumps(action),policy,state,"operator",now)
             applied = []
             def transport(request):

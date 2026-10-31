@@ -47,6 +47,7 @@ class Executor:
             raise Denied("execution_already_claimed")
         action = json.loads(row[0])
         self.gate.check(action, policy, state, requester, now)
+        self.gate.check_review_evidence(execution_id,state)
         if digest({"action": action, "policy": policy}) != row[1]:
             raise Denied("policy_changed")
         request = {"target": {k: action[k] for k in ("cluster", "namespace", "name")},

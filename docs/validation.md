@@ -36,3 +36,15 @@ The statements above describe the durable-journal milestone. Real API evidence a
 - [Offline CI 41051862582](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41051862582): success on the same code commit.
 
 Remaining unverified: Meta model inference, real outage diagnosis/recovery, authenticated review UI/service, production RBAC/isolation, sustained availability/load, and external customer deployment. The CI cluster tests a healthy fixture's authorized capacity change. No paid Meta API requests, cloud provisioning or AWS spending occurred; the test cluster ran inside a GitHub-hosted runner.
+
+## Local authenticated review — October 31, 2026
+
+- Final local suite: **41 tests passed in 19.995 seconds**, OK, Windows Python 3.12.14. Compilation passed; combined verification command exited 0.
+- Added actual loopback HTTP tests for missing/invalid credentials, authenticated review/approval, no-store responses, identity-field injection, self-approval denial, Host/Origin rejection, duplicate JSON members and bounded request bodies.
+- Added exact snapshot, current policy/evidence, original expiry, atomic decision/approval rollback, concurrent approval and execution-time evidence binding tests.
+- Chrome smoke check loaded a synthetic review with a generated temporary test identity, displayed the target/action/policy/evidence/expiry/digest, checked the acknowledgment and returned `APPROVED by reviewer. No write was dispatched.` Credential field was cleared before capturing proof. The temporary preview process was stopped afterward.
+- In-app browser was unavailable; the existing connected Chrome integration was used. This was a browser capability failure, not a review-service failure.
+- The kind harness now routes its valid action through the review kernel before authorization/dispatch. Its new remote result must be checked independently after publishing.
+
+This supersedes only the earlier pending local-review status. Production SSO/MFA, revocation, public TLS hosting and privileged executor isolation remain unimplemented. The review HTTP server is explicitly a loopback prototype. No Meta inference or paid API calls were made.
+

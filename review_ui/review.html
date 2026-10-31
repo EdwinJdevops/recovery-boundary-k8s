@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recovery Boundary · Review</title><link rel="stylesheet" href="/review.css"><script src="/review.js" defer></script></head>
+<body><main><p class="eyebrow">RECOVERY BOUNDARY / LOCAL PROTOTYPE</p><h1>Review the exact recovery action</h1><p>Approval creates permission for one unchanged action. It does not execute a cluster write.</p>
+<section><label>Review ID<input id="review-id" autocomplete="off" value="demo-review"></label><label>Provisioned access token<input id="token" type="password" autocomplete="off"></label><button id="load">Load review</button></section>
+<p id="status" role="status">Enter your provisioned token. Tokens remain in this page’s memory and are not saved.</p>
+<article id="review" hidden><h2 id="summary"></h2><p id="expiry"></p><h3>Exact action, policy and observed evidence</h3><pre id="snapshot"></pre><p>Snapshot SHA-256</p><code id="digest"></code><label class="confirm"><input id="confirm" type="checkbox">I reviewed this exact action and its scope.</label><button id="approve" disabled>Approve exact snapshot</button></article>
+<footer>Separate identities are required for requesting and approving. This local prototype uses provisioned bearer credentials; it is not production SSO.</footer></main></body></html>
