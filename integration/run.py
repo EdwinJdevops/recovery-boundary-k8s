@@ -96,7 +96,13 @@ def main():
 
             # Harness-only fault injection. The recovery executor cannot scale to zero.
             client.run(["scale","deployment",NAME,"-n",NAMESPACE,"--replicas=0"])
-            client.run(["wait","--for=delete","pod","-l","app=recovery-boundary-demo","-n",NAMESPACE,"--timeout=120s"])
+            end = time.monotonic()+120
+            while True:
+                pods = json.loads(client.run(["get","pods","-l","app=recovery-boundary-demo","-n",NAMESPACE,"-o","json"]))
+                if not pods["items"]:
+                    break
+                require(time.monotonic()<end,"workload pods did not terminate")
+                time.sleep(1)
             end = time.monotonic()+30
             while True:
                 slices = json.loads(client.run(["get","endpointslices.discovery.k8s.io","-n",NAMESPACE,"-l","kubernetes.io/service-name=checkout","-o","json"]))

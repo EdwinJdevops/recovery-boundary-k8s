@@ -39,6 +39,9 @@ jobs:
         with:
           name: real-kubernetes-evidence
           path: integration-result.json
+      - name: Diagnose fixture failure without exporting credentials
+        if: failure()
+        run: kubectl --kubeconfig "$KUBECONFIG" --context kind-recovery-boundary --request-timeout=10s -n recovery-boundary-demo get deployment,pods,service,endpointslices -o wide
       - name: Remove disposable cluster
         if: always()
         run: kind delete cluster --name recovery-boundary
