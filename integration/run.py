@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from gate import Gate, Denied, conditional_patch
 from execution import Executor
 from review import Reviews
-from kubernetes_local import LocalKubernetes, workload_ready, CONTEXT, NAMESPACE, NAME
+from kubernetes_local import LocalKubernetes, workload_ready, ready_backend_count, CONTEXT, NAMESPACE, NAME
 
 
 def require(condition, message):
@@ -106,7 +106,7 @@ def main():
             end = time.monotonic()+30
             while True:
                 slices = json.loads(client.run(["get","endpointslices.discovery.k8s.io","-n",NAMESPACE,"-l","kubernetes.io/service-name=checkout","-o","json"]))
-                if not any(e.get("conditions",{}).get("ready",True) for item in slices["items"] for e in item.get("endpoints",[])):
+                if ready_backend_count(slices)==0:
                     break
                 require(time.monotonic()<end,"service endpoints did not become unavailable")
                 time.sleep(1)

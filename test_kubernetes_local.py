@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 from gate import Denied, conditional_patch
 from fixtures import ACTION
-from kubernetes_local import LocalKubernetes, workload_ready, CONTEXT, NAMESPACE, NAME
+from kubernetes_local import LocalKubernetes, workload_ready, ready_backend_count, CONTEXT, NAMESPACE, NAME
 
 
 def healthy():
@@ -15,6 +15,17 @@ def healthy():
 
 
 class KubernetesTests(unittest.TestCase):
+    def test_empty_endpoint_slices_and_unknown_readiness(self):
+        for item in ({"endpoints":None},{"endpoints":[]},{}):
+            self.assertEqual(ready_backend_count({"items":[item]}),0)
+        self.assertEqual(ready_backend_count({"items":[{"endpoints":[{"conditions":{"ready":False}},
+            {"conditions":{"ready":True}},{"conditions":{"ready":None}},{}]}]}),3)
+
+    def test_malformed_endpoint_evidence_cannot_prove_outage(self):
+        for obj in ({},{"items":None},{"items":[None]},{"items":[{"endpoints":"bad"}]},
+                    {"items":[{"endpoints":[{"conditions":"bad"}]}]}):
+            with self.subTest(obj=obj),self.assertRaises(Denied): ready_backend_count(obj)
+
     def test_health_requires_current_controller_evidence(self):
         self.assertTrue(workload_ready(healthy(),"u1",2,3))
         for key, value in (("observedGeneration",1),("availableReplicas",2),("updatedReplicas",2),

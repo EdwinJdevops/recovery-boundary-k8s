@@ -78,6 +78,31 @@ class LocalKubernetes:
                            "--patch", json.dumps(patch), "-o", "json"])
 
 
+def ready_backend_count(slices):
+    """Null/omitted endpoints means empty; unknown readiness is conservatively live."""
+    if type(slices) is not dict or type(slices.get("items")) is not list:
+        raise Denied("invalid_endpoint_evidence")
+    count = 0
+    for item in slices["items"]:
+        if type(item) is not dict:
+            raise Denied("invalid_endpoint_evidence")
+        endpoints = item.get("endpoints")
+        if endpoints is None:
+            endpoints = []
+        if type(endpoints) is not list:
+            raise Denied("invalid_endpoint_evidence")
+        for endpoint in endpoints:
+            if type(endpoint) is not dict:
+                raise Denied("invalid_endpoint_evidence")
+            conditions = endpoint.get("conditions")
+            if conditions is None:
+                conditions = {}
+            if type(conditions) is not dict:
+                raise Denied("invalid_endpoint_evidence")
+            count += conditions.get("ready") is not False
+    return count
+
+
 def workload_ready(obj, uid, generation, replicas):
     """Controller evidence only; separate HTTP probes are needed for service health."""
     try:
