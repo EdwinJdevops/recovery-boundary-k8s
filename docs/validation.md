@@ -44,7 +44,9 @@ Remaining unverified: Meta model inference, real outage diagnosis/recovery, auth
 - Added exact snapshot, current policy/evidence, original expiry, atomic decision/approval rollback, concurrent approval and execution-time evidence binding tests.
 - Chrome smoke check loaded a synthetic review with a generated temporary test identity, displayed the target/action/policy/evidence/expiry/digest, checked the acknowledgment and returned `APPROVED by reviewer. No write was dispatched.` Credential field was cleared before capturing proof. The temporary preview process was stopped afterward.
 - In-app browser was unavailable; the existing connected Chrome integration was used. This was a browser capability failure, not a review-service failure.
-- The kind harness now routes its valid action through the review kernel before authorization/dispatch. Its new remote result must be checked independently after publishing.
+- Published implementation: [65a1721](https://github.com/EdwinJdevops/recovery-boundary-k8s/commit/65a1721672452b6851efae6c53a1ea263c93a31e).
+- [Remote offline CI](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41203371239): success; actual job log reports **41 tests in 3.545 seconds, OK**. Both synthetic demos and compilation succeeded.
+- [Reviewed kind integration](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41203371227): success on Kubernetes v1.35.8; actual log lists stale_resource_version_rejected_by_api, wrong_uid_rejected_by_api, exact_review_snapshot_approved, approved_conditional_patch_applied, three_replicas_controller_ready, five_service_http_probes_passed and execution_replay_blocked.
+- [Reviewed API evidence artifact](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41203371227/artifacts/13042803652) uploaded; disposable cluster cleanup succeeded. This combines the review kernel with real API execution. The separate HTTP tests validate authentication; this is not an enterprise identity or human-attention test.
 
 This supersedes only the earlier pending local-review status. Production SSO/MFA, revocation, public TLS hosting and privileged executor isolation remain unimplemented. The review HTTP server is explicitly a loopback prototype. No Meta inference or paid API calls were made.
-
