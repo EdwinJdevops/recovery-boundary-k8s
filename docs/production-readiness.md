@@ -13,7 +13,7 @@ An approved automation can become unauthorized before dispatch, or lose its resp
 | Expiry and revocation | Original expiry preserved; durable revocation serialized with dispatch; concurrency tests | Operational procedures and production identity authorization for cancellation |
 | Dispatch crash safety | Durable intent and claim; process-exit/timeout/replay tests | Reconciliation workflow, backup/restore validation, storage failure testing and measured throughput |
 | Target permissions | Named-Deployment get/patch Role and API denial tests in disposable kind | Isolated worker credentials; no admin impersonation in production; admission constraints for fields that RBAC cannot restrict |
-| Recovery effectiveness | Controlled zero-backend outage harness with separate client, controller and HTTP checks | Verified remote result; broader failure corpus and actual operator feedback |
+| Recovery effectiveness | Controlled zero-backend outage recovered on Kubernetes v1.35.8 in [CI 41206932522](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206932522), with separate client/controller/HTTP checks | Broader failure corpus and actual operator feedback |
 | Model usefulness | No genuine model-inference evidence yet | Authorized Meta access, real runs, held-out incident evaluation and deterministic baseline comparison |
 | Runtime and network isolation | Adapter only permits the dedicated local kind context; UI binds loopback | Supported server/runtime, TLS ingress, network isolation, resource limits and deployment manifests for the real service |
 | Observability and incident response | Persisted execution state/reasons and reviewer/revoker attribution | Operational metrics, alerting, protected audit export, retention and on-call runbooks |
@@ -32,3 +32,5 @@ An approved automation can become unauthorized before dispatch, or lose its resp
 ## Engineering priorities after this change
 
 Obtain evidence of actual user pain from platform operators; evaluate Meta-generated proposals against a small, labeled incident corpus; deploy the trusted boundary with real identity and isolated executor credentials; complete storage recovery and independent review gates before any production release. Keep each claim linked to a reproducible artifact and a stated limit.
+
+Commercial release is also blocked: see the [November 1 commercial assessment](commercial-assessment.md). Existing platforms and research overlap materially with the current feature set. The next product decision requires operator evidence and a comparative evaluation, not a broader feature list.

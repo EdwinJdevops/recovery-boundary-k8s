@@ -57,3 +57,21 @@ This supersedes only the earlier pending local-review status. Production SSO/MFA
 - Covers revocation before authorization, durable cancellation of pending execution, refusal after dispatch claim, eight rounds of revocation/dispatch concurrency, HTTP reviewer attribution, requester denial, and malformed policy collection/number rejection.
 - Added a controlled zero-backend outage plus API-enforced RBAC denial tests to the kind harness. Remote results for these additions are pending until independently checked after publication.
 - Pinned the fixture base-image digest and action commits to values already resolved in prior successful CI logs. No production readiness or independent security audit is claimed.
+
+### Integration failures investigated and corrected
+
+- [41206099386](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206099386) failed during pod deletion: a long wait exceeded the command wrapper's 20-second deadline. The fixture ran Python's stock server as PID 1 without an explicit SIGTERM handler. Added graceful signal handling, bounded deletion polling and a Linux signal regression. Mutation deadlines were not extended.
+- [41206687322](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206687322) progressed through termination but found a real EndpointSlice response with `endpoints: null`. Added explicit empty-array handling and conservative treatment of unknown readiness; malformed endpoint evidence cannot prove an outage.
+- The Linux shutdown regression passed in [offline CI 41206687228](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206687228), which reported 50 tests in 4.816 seconds, OK. On Windows the POSIX signal test was explicitly skipped; compilation passed.
+- Focused endpoint parser suite passed 6 tests in 0.015 seconds locally; compilation passed.
+- Both failed integration runs cleaned up their disposable clusters. No success artifact or successful-outage claim was made for those runs.
+
+### Completed hardening evidence (reviewed November 1)
+
+- Successful code commit: [34d865c](https://github.com/EdwinJdevops/recovery-boundary-k8s/commit/34d865c1a0dcdaa6d9305c5a9c54660a3aa6e286).
+- [Offline CI 41206932482](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206932482): actual Linux log reports **52 tests in 4.580 seconds, OK**, including the SIGTERM regression. Synthetic demos and compilation also passed.
+- [Controlled-outage integration 41206932522](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206932522): success on Kubernetes v1.35.8. Verified baseline HTTP; API Forbidden for secrets/other targets/namespaces/delete/pod creation; stale resourceVersion and wrong-UID rejection; observed zero-backend outage; revoked recovery blocked; new exact review approved; conditional recovery applied; three replicas ready; five Service HTTP probes passed; replay denied.
+- [Evidence artifact](https://github.com/EdwinJdevops/recovery-boundary-k8s/actions/runs/41206932522/artifacts/13044651872) uploaded; disposable cluster deleted. RBAC was exercised with administrator-authorized impersonation, not isolated production credentials.
+- Updated revocation control was HTTP/API-tested. Browser recheck was unavailable due to browser connection timeout; no new visual-verification claim is made.
+
+These results validate the scoped engineering mechanism, not market demand, general incident diagnosis, sustained availability or production readiness. Meta inference remains disabled at the user's instruction while credits are unavailable.

@@ -39,6 +39,10 @@ A local review UI and bearer-authenticated HTTP prototype bind the displayed sna
 
 Not connected or tested. No paid Meta calls, payments or AWS resources were used. Planned integration: a Meta model interprets incident evidence into this constrained proposal schema; the same gate remains independent. Until a genuine permitted Meta model run is integrated and demonstrated, this is not a complete hackathon submission.
 
+## Commercial status
+
+Not commercially validated or production-ready. Existing incident/workflow platforms and published research overlap with the current feature set. The [commercial assessment](docs/commercial-assessment.md) recommends retaining the technical harness, dropping generic AI-SRE positioning and validating one concrete operator workflow before broadening the product. No customer interviews, paid pilots, customer ROI or adoption claims have been established. See the [customer validation record](docs/customer-validation.md).
+
 ## Originality
 
 Code written fresh on October 30, 2026. Existing repositories were inspected for scope; no code was copied from them. AI coding assistance: OpenAI Codex. Python's standard library is used. No third-party runtime dependencies or model weights are bundled. No open-source license grant has been selected for this original code yet.
