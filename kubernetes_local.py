@@ -44,6 +44,9 @@ class LocalKubernetes:
                 raise Denied("kubernetes_replica_policy_denied")
             if "Error from server (Forbidden)" in result.stderr:
                 raise Denied("kubernetes_forbidden")
+            for status in ("Invalid", "BadRequest", "NotFound", "InternalError", "Unauthorized", "Conflict"):
+                if f"Error from server ({status})" in result.stderr:
+                    raise Denied(f"kubernetes_status_{status}")
             raise Denied("kubectl_failed")  # stderr can contain credentials; do not log it.
         return result.stdout
 

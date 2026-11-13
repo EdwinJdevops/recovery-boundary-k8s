@@ -66,7 +66,7 @@ def main():
     # A newly created binding propagates asynchronously. Only a policy-specific
     # server-side dry-run denial establishes that enforcement is active.
     deadline = time.monotonic() + 20
-    for replicas in (0, 5):
+    for replicas in (5, 0):
         while True:
             try:
                 executor.run(["patch", "deployment", NAME, "-n", NAMESPACE,
@@ -74,7 +74,8 @@ def main():
                               "--patch", json.dumps({"spec": {"replicas": replicas}}),
                               "--dry-run=server"])
             except Denied as error:
-                require(str(error) == "kubernetes_replica_policy_denied", "expected replica policy denial")
+                require(str(error) == "kubernetes_replica_policy_denied",
+                        f"expected replica policy denial for {replicas}: {error}")
                 break
             require(time.monotonic() < deadline, f"replica policy allowed {replicas}")
             time.sleep(0.5)
