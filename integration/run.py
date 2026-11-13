@@ -63,16 +63,21 @@ def main():
         else:
             raise AssertionError("executor exceeded RBAC scope")
     checks.append("rbac_denies_secrets_other_targets_namespaces_delete_and_pod_creation")
+    # A newly created binding propagates asynchronously. Only a policy-specific
+    # server-side dry-run denial establishes that enforcement is active.
+    deadline = time.monotonic() + 20
     for replicas in (0, 5):
-        try:
-            executor.run(["patch", "deployment", NAME, "-n", NAMESPACE,
-                          "--subresource=scale", "--type=merge",
-                          "--patch", json.dumps({"spec": {"replicas": replicas}}),
-                          "--dry-run=server"])
-        except Denied as error:
-            require(str(error) == "kubernetes_replica_policy_denied", "expected replica policy denial")
-        else:
-            raise AssertionError("executor exceeded admission replica bounds")
+        while True:
+            try:
+                executor.run(["patch", "deployment", NAME, "-n", NAMESPACE,
+                              "--subresource=scale", "--type=merge",
+                              "--patch", json.dumps({"spec": {"replicas": replicas}}),
+                              "--dry-run=server"])
+            except Denied as error:
+                require(str(error) == "kubernetes_replica_policy_denied", "expected replica policy denial")
+                break
+            require(time.monotonic() < deadline, f"replica policy allowed {replicas}")
+            time.sleep(0.5)
     checks.append("admission_denies_out_of_range_scale")
     probe = "import urllib.request; body=urllib.request.urlopen('http://checkout:8080/index.html',timeout=5).read(); assert body.strip()==b'recovery-boundary-ok'; print('HTTP_OK')"
     def service_probe(script):

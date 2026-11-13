@@ -5,9 +5,10 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    matchPolicy: Equivalent
     resourceRules:
       - apiGroups: [apps]
-        apiVersions: [v1]
+        apiVersions: ["*"]
         operations: [UPDATE]
         resources: [deployments/scale]
         scope: Namespaced
