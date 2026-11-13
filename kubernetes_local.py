@@ -74,7 +74,7 @@ class LocalKubernetes:
                 or last["path"] != "/spec/replicas" or type(last["value"]) is not int
                 or not 1 <= last["value"] <= 10):
             raise Denied("invalid_mutation")
-        return self._json(["patch", "deployment", NAME, "-n", NAMESPACE, "--type=json",
+        return self._json(["patch", "deployment", NAME, "-n", NAMESPACE, "--subresource=scale", "--type=json",
                            "--patch", json.dumps(patch), "-o", "json"])
 
 

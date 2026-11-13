@@ -81,6 +81,7 @@ class Gate:
         self.db.execute("CREATE TABLE IF NOT EXISTS executions (id TEXT PRIMARY KEY, action TEXT NOT NULL, binding TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY, execution_id TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS approval_evidence (id TEXT PRIMARY KEY, digest TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS approval_actors (id TEXT PRIMARY KEY REFERENCES approvals(id), requester TEXT NOT NULL, approver TEXT NOT NULL, CHECK(requester <> approver))")
         self.db.execute("CREATE TABLE IF NOT EXISTS revocations (id TEXT PRIMARY KEY, revoked_by TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL)")
         self.db.commit()
 
@@ -146,11 +147,15 @@ class Gate:
                                 (approval_id,"CANCELLED","approval_revoked",now))
         return "REVOKED"
 
+    def record_approval(self, values, requester, approver):
+        """Insert the grant and its attribution inside the caller's transaction."""
+        self.db.execute("INSERT INTO approvals(id,binding,issued,expires) VALUES (?,?,?,?)", values)
+        self.db.execute("INSERT INTO approval_actors VALUES (?,?,?)", (values[0], requester, approver))
+
     def approve(self, approval_id, action, policy, state, requester, approver, now, ttl=120):
         values = self.approval_values(approval_id, action, policy, state, requester, approver, now, ttl)
         with self.db:
-            self.db.execute("INSERT INTO approvals(id,binding,issued,expires) VALUES (?,?,?,?)",
-                            values)
+            self.record_approval(values, requester, approver)
 
     def authorize(self, approval_id, raw, policy, state, requester, now):
         action = parse(raw)
@@ -160,7 +165,7 @@ class Gate:
         # Prepare bytes before claiming; no caller-controlled shell or arbitrary patch.
         patch = conditional_patch(action)
         with self.db:
-            changed = self.db.execute("UPDATE approvals SET consumed=1 WHERE id=? AND binding=? AND issued<=? AND expires>? AND consumed=0 AND NOT EXISTS (SELECT 1 FROM revocations WHERE revocations.id=approvals.id)",
+            changed = self.db.execute("UPDATE approvals SET consumed=1 WHERE id=? AND binding=? AND issued<=? AND expires>? AND consumed=0 AND EXISTS (SELECT 1 FROM approval_actors WHERE approval_actors.id=approvals.id) AND NOT EXISTS (SELECT 1 FROM revocations WHERE revocations.id=approvals.id)",
                                       (approval_id, binding, now, now)).rowcount
             if changed != 1:
                 raise Denied("approval_unavailable")

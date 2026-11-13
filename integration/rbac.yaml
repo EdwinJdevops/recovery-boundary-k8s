@@ -14,6 +14,10 @@ rules:
   - apiGroups: [apps]
     resources: [deployments]
     resourceNames: [checkout]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    resourceNames: [checkout]
     verbs: [get, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

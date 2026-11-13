@@ -1,0 +1,29 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: recovery-boundary-demo-scale
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [deployments/scale]
+        scope: Namespaced
+  matchConditions:
+    - name: recovery-executor
+      expression: request.userInfo.username == 'system:serviceaccount:recovery-boundary-demo:recovery-executor'
+  validations:
+    - expression: request.namespace == 'recovery-boundary-demo' && request.name == 'checkout'
+      message: Recovery executor is restricted to the demo checkout Deployment.
+    - expression: object.spec.replicas >= 1 && object.spec.replicas <= 4
+      message: Recovery executor may set between one and four replicas.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: recovery-boundary-demo-scale
+spec:
+  policyName: recovery-boundary-demo-scale
+  validationActions: [Deny]
