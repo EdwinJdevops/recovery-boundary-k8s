@@ -40,6 +40,8 @@ class LocalKubernetes:
         result = subprocess.run(self.prefix + args, input=input_text, capture_output=True,
                                 text=True, timeout=20, shell=False)
         if result.returncode:
+            if "Recovery executor may set between one and four replicas." in result.stderr:
+                raise Denied("kubernetes_replica_policy_denied")
             if "Error from server (Forbidden)" in result.stderr:
                 raise Denied("kubernetes_forbidden")
             raise Denied("kubectl_failed")  # stderr can contain credentials; do not log it.

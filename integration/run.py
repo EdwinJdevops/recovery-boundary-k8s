@@ -70,7 +70,7 @@ def main():
                           "--patch", json.dumps({"spec": {"replicas": replicas}}),
                           "--dry-run=server"])
         except Denied as error:
-            require(str(error) == "kubernetes_forbidden", "expected admission denial")
+            require(str(error) == "kubernetes_replica_policy_denied", "expected replica policy denial")
         else:
             raise AssertionError("executor exceeded admission replica bounds")
     checks.append("admission_denies_out_of_range_scale")
