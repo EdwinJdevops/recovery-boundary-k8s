@@ -79,7 +79,7 @@ class Reviews:
                                                (principal,now,review_id,viewed_digest)).rowcount
                 if changed != 1:
                     raise Denied("review_changed_or_decided")
-                self.gate.db.execute("INSERT INTO approvals(id,binding,issued,expires) VALUES (?,?,?,?)",values)
+                self.gate.record_approval(values, action["requester"], principal)
                 self.gate.db.execute("INSERT INTO approval_evidence(id,digest) VALUES (?,?)",
                                      (review_id,digest(relevant(snapshot["observation"]))))
         except sqlite3.IntegrityError as exc:

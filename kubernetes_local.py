@@ -40,8 +40,13 @@ class LocalKubernetes:
         result = subprocess.run(self.prefix + args, input=input_text, capture_output=True,
                                 text=True, timeout=20, shell=False)
         if result.returncode:
+            if "Recovery executor may set between one and four replicas." in result.stderr:
+                raise Denied("kubernetes_replica_policy_denied")
             if "Error from server (Forbidden)" in result.stderr:
                 raise Denied("kubernetes_forbidden")
+            for status in ("Invalid", "BadRequest", "NotFound", "InternalError", "Unauthorized", "Conflict"):
+                if f"Error from server ({status})" in result.stderr:
+                    raise Denied(f"kubernetes_status_{status}")
             raise Denied("kubectl_failed")  # stderr can contain credentials; do not log it.
         return result.stdout
 
@@ -74,8 +79,10 @@ class LocalKubernetes:
                 or last["path"] != "/spec/replicas" or type(last["value"]) is not int
                 or not 1 <= last["value"] <= 10):
             raise Denied("invalid_mutation")
-        return self._json(["patch", "deployment", NAME, "-n", NAMESPACE, "--type=json",
-                           "--patch", json.dumps(patch), "-o", "json"])
+        # Scale may omit replicas at zero. JSON Patch add also replaces an existing member.
+        scale_patch = [*patch[:2], {**last, "op": "add"}]
+        return self._json(["patch", "deployment", NAME, "-n", NAMESPACE, "--subresource=scale", "--type=json",
+                           "--patch", json.dumps(scale_patch), "-o", "json"])
 
 
 def ready_backend_count(slices):

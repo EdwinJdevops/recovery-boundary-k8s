@@ -25,6 +25,18 @@ class GateTests(unittest.TestCase):
         result = self.run_action()
         self.assertEqual(result["patch"], [{"op":"test","path":"/metadata/uid","value":"deployment-1"}, {"op":"test","path":"/metadata/resourceVersion","value":"42"}, {"op":"replace","path":"/spec/replicas","value":3}])
 
+    def test_approval_records_both_actors(self):
+        row = self.gate.db.execute(
+            "SELECT requester, approver FROM approval_actors WHERE id=?", ("a",)
+        ).fetchone()
+        self.assertEqual(row, ("operator", "reviewer"))
+
+    def test_legacy_grant_requires_fresh_approval(self):
+        with self.gate.db:
+            self.gate.db.execute("DELETE FROM approval_actors WHERE id=?", ("a",))
+        with self.assertRaisesRegex(Denied, "approval_unavailable"):
+            self.run_action()
+
     def test_replay(self):
         self.run_action()
         with self.assertRaises(Denied): self.run_action()

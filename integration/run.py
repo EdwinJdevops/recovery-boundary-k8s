@@ -34,6 +34,7 @@ def main():
     initial = client.read()
     wait_ready(client,initial,1)
     client.run(["wait","--for=condition=Ready","pod/service-probe","-n",NAMESPACE,"--timeout=120s"])
+    client.run(["apply","-f",str(Path(__file__).with_name("admission.yaml"))])
     client.run(["apply","-f",str(Path(__file__).with_name("rbac.yaml"))])
     executor = LocalKubernetes(os.environ["KUBECONFIG"],executor_identity=True)
     policy = dict(cluster=CONTEXT,namespaces=[NAMESPACE],max_replicas=4,
@@ -49,6 +50,9 @@ def main():
         ["get","deployment","unapproved","-n",NAMESPACE,"-o","json"],
         ["get","deployment",NAME,"-n","default","-o","json"],
         ["delete","deployment",NAME,"-n",NAMESPACE],
+        ["patch","deployment",NAME,"-n",NAMESPACE,"--type=merge",
+         "--patch",json.dumps({"metadata":{"annotations":{"boundary-test":"denied"}}}),
+         "--dry-run=server"],
         ["run","unapproved-pod","-n",NAMESPACE,"--image=recovery-boundary-demo:test","--restart=Never"],
     ]
     for command in forbidden_commands:
@@ -59,6 +63,23 @@ def main():
         else:
             raise AssertionError("executor exceeded RBAC scope")
     checks.append("rbac_denies_secrets_other_targets_namespaces_delete_and_pod_creation")
+    # A newly created binding propagates asynchronously. Only a policy-specific
+    # server-side dry-run denial establishes that enforcement is active.
+    deadline = time.monotonic() + 20
+    for replicas in (5, 0):
+        while True:
+            try:
+                executor.run(["patch", "deployment", NAME, "-n", NAMESPACE,
+                              "--subresource=scale", "--type=json",
+                              "--patch", json.dumps([{"op": "add", "path": "/spec/replicas", "value": replicas}]),
+                              "--dry-run=server"])
+            except Denied as error:
+                require(str(error) == "kubernetes_replica_policy_denied",
+                        f"expected replica policy denial for {replicas}: {error}")
+                break
+            require(time.monotonic() < deadline, f"replica policy allowed {replicas}")
+            time.sleep(0.5)
+    checks.append("admission_denies_out_of_range_scale")
     probe = "import urllib.request; body=urllib.request.urlopen('http://checkout:8080/index.html',timeout=5).read(); assert body.strip()==b'recovery-boundary-ok'; print('HTTP_OK')"
     def service_probe(script):
         return client.run(["exec","pod/service-probe","-n",NAMESPACE,"--","python","-c",script]).strip()
@@ -149,15 +170,10 @@ else:
             reviews.approve("valid",viewed["snapshot_sha256"],"reviewer",policy,state,now)
             checks.append("exact_review_snapshot_approved")
             gate.authorize("valid",json.dumps(action),policy,state,"operator",now)
-            applied = []
-            def transport(request):
-                result = executor(request)
-                applied.append(result)
-                return result
-            receipt = Executor(gate).dispatch("valid",policy,state,"operator",int(time.time()),transport)
+            receipt = Executor(gate).dispatch("valid",policy,state,"operator",int(time.time()),executor)
             require(receipt["status"] == "APPLIED_RESPONSE","valid patch was not confirmed")
             checks.append("approved_conditional_patch_applied")
-            wait_ready(client,applied[0],3)
+            wait_ready(client,client.read(),3)
             checks.append("three_replicas_controller_ready")
             # Independent application check through Service DNS, from within the cluster.
             for _ in range(5):
