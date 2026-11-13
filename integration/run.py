@@ -27,7 +27,36 @@ def wait_ready(client, applied, replicas):
     raise AssertionError("workload readiness timed out")
 
 
+def executor_config(client, directory):
+    # Copy only the public API endpoint and CA. No admin user or key is copied.
+    cluster = json.loads(client.run([
+        "config", "view", "--minify", "--flatten", "--raw",
+        "-o", 'jsonpath={.clusters[0].cluster}',
+    ]))
+    token = client.run(["create", "token", "recovery-executor",
+                        "-n", NAMESPACE, "--duration=10m"]).strip()
+    require(bool(token) and not any(c.isspace() for c in token), "invalid token response")
+    config = {
+        "apiVersion": "v1", "kind": "Config", "current-context": CONTEXT,
+        "clusters": [{"name": CONTEXT, "cluster": {
+            "server": cluster["server"],
+            "certificate-authority-data": cluster["certificate-authority-data"],
+        }}],
+        "contexts": [{"name": CONTEXT, "context": {"cluster": CONTEXT, "user": "executor"}}],
+        "users": [{"name": "executor", "user": {"token": token}}],
+    }
+    path = Path(directory) / "executor.json"
+    with path.open("x", encoding="utf-8") as stream:
+        json.dump(config, stream)
+    return path
+
+
 def main():
+    with tempfile.TemporaryDirectory(prefix="boundary-executor-") as directory:
+        run_integration(directory)
+
+
+def run_integration(credential_directory):
     client = LocalKubernetes(os.environ["KUBECONFIG"])
     # Applies only the fixed repository fixture to the explicitly guarded cluster.
     client.run(["apply","-f",str(Path(__file__).with_name("workload.yaml"))])
@@ -36,7 +65,7 @@ def main():
     client.run(["wait","--for=condition=Ready","pod/service-probe","-n",NAMESPACE,"--timeout=120s"])
     client.run(["apply","-f",str(Path(__file__).with_name("admission.yaml"))])
     client.run(["apply","-f",str(Path(__file__).with_name("rbac.yaml"))])
-    executor = LocalKubernetes(os.environ["KUBECONFIG"],executor_identity=True)
+    executor = LocalKubernetes(executor_config(client, credential_directory))
     policy = dict(cluster=CONTEXT,namespaces=[NAMESPACE],max_replicas=4,
                   requesters=["operator"],approvers=["reviewer"],version=1)
     def action_for(obj, incident):
@@ -186,7 +215,7 @@ else:
                 checks.append("execution_replay_blocked")
             else:
                 raise AssertionError("execution replay accepted")
-            report = {"mode":"REAL_KIND_API", "checks":checks,"replicas":3,
+            report = {"mode":"REAL_KIND_API", "executor_auth":"ServiceAccount TokenRequest", "checks":checks,"replicas":3,
                       "kubernetes":json.loads(client.run(["version","-o","json"]))["serverVersion"]["gitVersion"],
                       "scope":"controlled zero-backend fixture outage; not real customer incident diagnosis or sustained availability proof"}
             output = Path("integration-result.json")
