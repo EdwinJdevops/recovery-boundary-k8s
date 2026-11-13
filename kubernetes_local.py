@@ -79,8 +79,10 @@ class LocalKubernetes:
                 or last["path"] != "/spec/replicas" or type(last["value"]) is not int
                 or not 1 <= last["value"] <= 10):
             raise Denied("invalid_mutation")
+        # Scale may omit replicas at zero. JSON Patch add also replaces an existing member.
+        scale_patch = [*patch[:2], {**last, "op": "add"}]
         return self._json(["patch", "deployment", NAME, "-n", NAMESPACE, "--subresource=scale", "--type=json",
-                           "--patch", json.dumps(patch), "-o", "json"])
+                           "--patch", json.dumps(scale_patch), "-o", "json"])
 
 
 def ready_backend_count(slices):

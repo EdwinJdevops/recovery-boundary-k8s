@@ -71,7 +71,7 @@ def main():
             try:
                 executor.run(["patch", "deployment", NAME, "-n", NAMESPACE,
                               "--subresource=scale", "--type=json",
-                              "--patch", json.dumps([{"op": "replace", "path": "/spec/replicas", "value": replicas}]),
+                              "--patch", json.dumps([{"op": "add", "path": "/spec/replicas", "value": replicas}]),
                               "--dry-run=server"])
             except Denied as error:
                 require(str(error) == "kubernetes_replica_policy_denied",
